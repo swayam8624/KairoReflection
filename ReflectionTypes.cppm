@@ -1,5 +1,6 @@
 module;
 
+#include <cmath>
 #include <concepts>
 #include <cstdint>
 #include <limits>
@@ -10,110 +11,13 @@ module;
 #include <type_traits>
 #include <utility>
 #include <variant>
+#include <vector>
 
 export module Kairo.Reflection.Types;
 
 export namespace kairo::reflection
 {
-    /// Canonical scalar values that a reflection client may exchange. Complex
-    /// engine objects remain references owned by their defining subsystem;
-    /// their editor adapters can compose this primitive surface later.
-    enum class PropertyValueKind : std::uint8_t
-    {
-        Boolean,
-        SignedInteger,
-        UnsignedInteger,
-        FloatingPoint,
-        String
-    };
-
-    enum class PropertyFlags : std::uint32_t
-    {
-        None = 0u,
-        ReadOnly = 1u << 0u,
-        Multiline = 1u << 1u,
-        Advanced = 1u << 2u
-    };
-
-    [[nodiscard]] constexpr PropertyFlags operator|(PropertyFlags left, PropertyFlags right) noexcept
-    {
-        return static_cast<PropertyFlags>(static_cast<std::uint32_t>(left) | static_cast<std::uint32_t>(right));
-    }
-
-    [[nodiscard]] constexpr bool HasFlag(PropertyFlags flags, PropertyFlags flag) noexcept
-    {
-        return (static_cast<std::uint32_t>(flags) & static_cast<std::uint32_t>(flag)) != 0u;
-    }
-
-    /// An owned, UI-neutral value. A property descriptor always states which
-    /// alternative it accepts, so the variant never silently coerces values.
-    class PropertyValue final
-    {
-    public:
-        using Storage = std::variant<bool, std::int64_t, std::uint64_t, double, std::string>;
-
-        PropertyValue(bool value) : m_Value(value) {}
-        PropertyValue(std::int64_t value) : m_Value(value) {}
-        PropertyValue(std::uint64_t value) : m_Value(value) {}
-        PropertyValue(double value) : m_Value(value)
-        {
-            if (value != value || value == std::numeric_limits<double>::infinity() ||
-                value == -std::numeric_limits<double>::infinity())
-                throw std::invalid_argument("Reflection floating-point values must be finite.");
-        }
-        PropertyValue(std::string value) : m_Value(std::move(value)) {}
-        PropertyValue(const char* value) : PropertyValue(std::string(value == nullptr ? "" : value)) {}
-
-        [[nodiscard]] PropertyValueKind Kind() const noexcept
-        {
-            return static_cast<PropertyValueKind>(m_Value.index());
-        }
-
-        template<typename Value>
-        [[nodiscard]] const Value& Get() const
-        {
-            return std::get<Value>(m_Value);
-        }
-
-        [[nodiscard]] friend bool operator==(const PropertyValue& left, const PropertyValue& right) noexcept
-        {
-            if (left.m_Value.index() != right.m_Value.index()) return false;
-            return std::visit([](const auto& first, const auto& second) noexcept
-            {
-                using First = std::remove_cvref_t<decltype(first)>;
-                using Second = std::remove_cvref_t<decltype(second)>;
-                if constexpr (std::same_as<First, Second>) return first == second;
-                else return false;
-            }, left.m_Value, right.m_Value);
-        }
-
-    private:
-        Storage m_Value;
-    };
-
-    /// Inclusive numeric editor range. It is applied only to numeric value
-    /// kinds; the actual object type still controls final conversion bounds.
-    struct NumericRange final
-    {
-        double Minimum = 0.0;
-        double Maximum = 0.0;
-        double Step = 0.0;
-    };
-
-    /// Stable property-facing metadata. `Key` is serialized; display strings
-    /// can change without invalidating documents or graph/property references.
-    struct PropertyMetadata final
-    {
-        std::string Key;
-        std::string DisplayName;
-        std::string Category = "General";
-        std::string Tooltip;
-        PropertyFlags Flags = PropertyFlags::None;
-        std::optional<NumericRange> Range;
-        std::size_t MaximumStringBytes = 0u;
-    };
-
-    /// A type key is a stable dotted ASCII identifier such as
+    /// A type/property/reference key is a stable dotted ASCII identifier such as
     /// `Kairo.Engine.Transform`. It intentionally is not an RTTI name, which
     /// keeps serialized data and plugin boundaries compiler-independent.
     [[nodiscard]] inline bool IsStableKey(std::string_view key) noexcept
@@ -136,6 +40,209 @@ export namespace kairo::reflection
         }
         return !segmentStart;
     }
+
+    struct Vector2Value final
+    {
+        double X = 0.0;
+        double Y = 0.0;
+        friend bool operator==(const Vector2Value&, const Vector2Value&) = default;
+    };
+
+    struct Vector3Value final
+    {
+        double X = 0.0;
+        double Y = 0.0;
+        double Z = 0.0;
+        friend bool operator==(const Vector3Value&, const Vector3Value&) = default;
+    };
+
+    struct Vector4Value final
+    {
+        double X = 0.0;
+        double Y = 0.0;
+        double Z = 0.0;
+        double W = 0.0;
+        friend bool operator==(const Vector4Value&, const Vector4Value&) = default;
+    };
+
+    /// Quaternion components use the engine-independent `(x,y,z,w)` convention.
+    /// Reflection validates finiteness only. Unit-length/domain constraints remain
+    /// the responsibility of the owning component validator.
+    struct QuaternionValue final
+    {
+        double X = 0.0;
+        double Y = 0.0;
+        double Z = 0.0;
+        double W = 1.0;
+        friend bool operator==(const QuaternionValue&, const QuaternionValue&) = default;
+    };
+
+    struct EnumerationValue final
+    {
+        std::int64_t Value = 0;
+        std::string Key;
+        friend bool operator==(const EnumerationValue&, const EnumerationValue&) = default;
+    };
+
+    /// Stable subsystem-owned reference encoded without importing that subsystem.
+    /// Examples are `Kairo.Assets.Mesh` + UUID text or `Kairo.Engine.Entity` +
+    /// a stable entity identifier. An empty Identifier represents a null reference.
+    struct ReferenceValue final
+    {
+        std::string TargetType;
+        std::string Identifier;
+        friend bool operator==(const ReferenceValue&, const ReferenceValue&) = default;
+    };
+
+    struct EnumOption final
+    {
+        std::int64_t Value = 0;
+        std::string Key;
+        std::string DisplayName;
+        friend bool operator==(const EnumOption&, const EnumOption&) = default;
+    };
+
+    enum class PropertyValueKind : std::uint8_t
+    {
+        Boolean,
+        SignedInteger,
+        UnsignedInteger,
+        FloatingPoint,
+        String,
+        Vector2,
+        Vector3,
+        Vector4,
+        Quaternion,
+        Enumeration,
+        Reference
+    };
+
+    enum class PropertyFlags : std::uint32_t
+    {
+        None = 0u,
+        ReadOnly = 1u << 0u,
+        Multiline = 1u << 1u,
+        Advanced = 1u << 2u
+    };
+
+    [[nodiscard]] constexpr PropertyFlags operator|(PropertyFlags left, PropertyFlags right) noexcept
+    {
+        return static_cast<PropertyFlags>(static_cast<std::uint32_t>(left) | static_cast<std::uint32_t>(right));
+    }
+
+    [[nodiscard]] constexpr bool HasFlag(PropertyFlags flags, PropertyFlags flag) noexcept
+    {
+        return (static_cast<std::uint32_t>(flags) & static_cast<std::uint32_t>(flag)) != 0u;
+    }
+
+    /// An owned, UI-neutral value. Composite records deliberately use doubles so
+    /// editor/document transports do not need the concrete engine math scalar type.
+    class PropertyValue final
+    {
+    public:
+        using Storage = std::variant<
+            bool,
+            std::int64_t,
+            std::uint64_t,
+            double,
+            std::string,
+            Vector2Value,
+            Vector3Value,
+            Vector4Value,
+            QuaternionValue,
+            EnumerationValue,
+            ReferenceValue>;
+
+        PropertyValue(bool value) : m_Value(value) {}
+        PropertyValue(std::int64_t value) : m_Value(value) {}
+        PropertyValue(std::uint64_t value) : m_Value(value) {}
+        PropertyValue(double value) : m_Value(value) { RequireFinite(value); }
+        PropertyValue(std::string value) : m_Value(std::move(value)) {}
+        PropertyValue(const char* value) : PropertyValue(std::string(value == nullptr ? "" : value)) {}
+        PropertyValue(Vector2Value value) : m_Value(value)
+        {
+            RequireFinite(value.X); RequireFinite(value.Y);
+        }
+        PropertyValue(Vector3Value value) : m_Value(value)
+        {
+            RequireFinite(value.X); RequireFinite(value.Y); RequireFinite(value.Z);
+        }
+        PropertyValue(Vector4Value value) : m_Value(value)
+        {
+            RequireFinite(value.X); RequireFinite(value.Y); RequireFinite(value.Z); RequireFinite(value.W);
+        }
+        PropertyValue(QuaternionValue value) : m_Value(value)
+        {
+            RequireFinite(value.X); RequireFinite(value.Y); RequireFinite(value.Z); RequireFinite(value.W);
+        }
+        PropertyValue(EnumerationValue value) : m_Value(std::move(value))
+        {
+            const auto& stored = std::get<EnumerationValue>(m_Value);
+            if (!IsStableKey(stored.Key))
+                throw std::invalid_argument("Reflection enumeration keys must be stable dotted ASCII identifiers.");
+        }
+        PropertyValue(ReferenceValue value) : m_Value(std::move(value))
+        {
+            const auto& stored = std::get<ReferenceValue>(m_Value);
+            if (!IsStableKey(stored.TargetType))
+                throw std::invalid_argument("Reflection reference target type must be a stable dotted ASCII identifier.");
+            if (stored.Identifier.size() > 4096u)
+                throw std::length_error("Reflection reference identifier exceeds 4096 bytes.");
+            for (const unsigned char character : stored.Identifier)
+                if (character < 0x20u || character == 0x7Fu)
+                    throw std::invalid_argument("Reflection reference identifiers cannot contain control bytes.");
+        }
+
+        [[nodiscard]] PropertyValueKind Kind() const noexcept
+        {
+            return static_cast<PropertyValueKind>(m_Value.index());
+        }
+
+        template<typename Value>
+        [[nodiscard]] const Value& Get() const
+        {
+            return std::get<Value>(m_Value);
+        }
+
+        [[nodiscard]] friend bool operator==(const PropertyValue& left, const PropertyValue& right) noexcept
+        {
+            return left.m_Value == right.m_Value;
+        }
+
+    private:
+        static void RequireFinite(double value)
+        {
+            if (!std::isfinite(value))
+                throw std::invalid_argument("Reflection floating-point values must be finite.");
+        }
+
+        Storage m_Value;
+    };
+
+    /// Inclusive numeric editor range. It is applied only to scalar numeric value
+    /// kinds; component-wise constraints belong to the owning component validator.
+    struct NumericRange final
+    {
+        double Minimum = 0.0;
+        double Maximum = 0.0;
+        double Step = 0.0;
+    };
+
+    /// Stable property-facing metadata. Existing aggregate initializers remain
+    /// source-compatible because V2 enum/reference metadata is appended.
+    struct PropertyMetadata final
+    {
+        std::string Key;
+        std::string DisplayName;
+        std::string Category = "General";
+        std::string Tooltip;
+        PropertyFlags Flags = PropertyFlags::None;
+        std::optional<NumericRange> Range;
+        std::size_t MaximumStringBytes = 0u;
+        std::vector<EnumOption> EnumOptions;
+        std::string ReferenceTargetType;
+        std::size_t MaximumReferenceBytes = 0u;
+    };
 
     template<typename Value>
     concept ReflectablePrimitive = std::same_as<std::remove_cvref_t<Value>, bool> ||

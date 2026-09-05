@@ -1,12 +1,16 @@
 module;
 
 #include <algorithm>
+#include <concepts>
+#include <cstdint>
 #include <functional>
+#include <limits>
 #include <map>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -35,6 +39,64 @@ export namespace kairo::reflection
         std::vector<PropertyDescriptor> Properties;
     };
 
+    namespace detail
+    {
+        [[nodiscard]] inline bool IsScalarNumeric(PropertyValueKind kind) noexcept
+        {
+            return kind == PropertyValueKind::SignedInteger ||
+                kind == PropertyValueKind::UnsignedInteger ||
+                kind == PropertyValueKind::FloatingPoint;
+        }
+
+        inline void ValidateEnumOptions(const PropertyDescriptor& property)
+        {
+            if (property.ValueKind != PropertyValueKind::Enumeration)
+            {
+                if (!property.Metadata.EnumOptions.empty())
+                    throw std::invalid_argument("Only enumeration reflection properties may declare enum options.");
+                return;
+            }
+
+            if (property.Metadata.EnumOptions.empty())
+                throw std::invalid_argument("Enumeration reflection properties require at least one option.");
+            if (property.Metadata.EnumOptions.size() > 512u)
+                throw std::length_error("Reflection enumeration exceeds 512 options.");
+
+            for (std::size_t index = 0; index < property.Metadata.EnumOptions.size(); ++index)
+            {
+                const EnumOption& option = property.Metadata.EnumOptions[index];
+                if (!IsStableKey(option.Key))
+                    throw std::invalid_argument("Reflection enum option key must be a stable dotted ASCII identifier.");
+                if (option.DisplayName.empty() || option.DisplayName.size() > 128u)
+                    throw std::invalid_argument("Reflection enum option display name must contain 1 to 128 bytes.");
+
+                for (std::size_t previous = 0; previous < index; ++previous)
+                {
+                    const EnumOption& other = property.Metadata.EnumOptions[previous];
+                    if (other.Key == option.Key)
+                        throw std::invalid_argument("Reflection enumeration contains duplicate option key: " + option.Key);
+                    if (other.Value == option.Value)
+                        throw std::invalid_argument("Reflection enumeration contains duplicate numeric option value.");
+                }
+            }
+        }
+
+        inline void ValidateReferenceMetadata(const PropertyDescriptor& property)
+        {
+            if (property.ValueKind == PropertyValueKind::Reference)
+            {
+                if (!IsStableKey(property.Metadata.ReferenceTargetType))
+                    throw std::invalid_argument("Reflection reference properties require a stable target type key.");
+                if (property.Metadata.MaximumReferenceBytes > 4096u)
+                    throw std::length_error("Reflection reference byte limit cannot exceed 4096.");
+                return;
+            }
+
+            if (!property.Metadata.ReferenceTargetType.empty() || property.Metadata.MaximumReferenceBytes != 0u)
+                throw std::invalid_argument("Only reference reflection properties may declare reference metadata.");
+        }
+    }
+
     inline void ValidatePropertyDescriptor(const PropertyDescriptor& property)
     {
         if (!IsStableKey(property.Metadata.Key))
@@ -49,15 +111,16 @@ export namespace kairo::reflection
         if (property.Metadata.Range.has_value())
         {
             const NumericRange range = *property.Metadata.Range;
-            if (property.ValueKind != PropertyValueKind::SignedInteger &&
-                property.ValueKind != PropertyValueKind::UnsignedInteger &&
-                property.ValueKind != PropertyValueKind::FloatingPoint)
-                throw std::invalid_argument("Only numeric reflection properties may declare a range.");
+            if (!detail::IsScalarNumeric(property.ValueKind))
+                throw std::invalid_argument("Only scalar numeric reflection properties may declare a range.");
             if (range.Minimum > range.Maximum || range.Step < 0.0)
                 throw std::invalid_argument("Reflection numeric range is invalid.");
         }
         if (property.ValueKind != PropertyValueKind::String && property.Metadata.MaximumStringBytes != 0u)
             throw std::invalid_argument("Only string reflection properties may declare a string byte limit.");
+
+        detail::ValidateEnumOptions(property);
+        detail::ValidateReferenceMetadata(property);
     }
 
     inline void ValidateTypeDescriptor(const TypeDescriptor& type)
@@ -128,6 +191,7 @@ export namespace kairo::reflection
             PropertyValue value = property.Read(object);
             if (value.Kind() != property.ValueKind)
                 throw std::logic_error("Reflection accessor returned a value with an unexpected kind.");
+            ValidateValue(property, value);
             return value;
         }
 
@@ -173,9 +237,32 @@ export namespace kairo::reflection
 
         static void ValidateValue(const PropertyDescriptor& property, const PropertyValue& value)
         {
-            if (property.Metadata.MaximumStringBytes != 0u &&
+            if (property.ValueKind == PropertyValueKind::String && property.Metadata.MaximumStringBytes != 0u &&
                 value.Get<std::string>().size() > property.Metadata.MaximumStringBytes)
                 throw std::length_error("Reflection string value exceeds its configured byte limit.");
+
+            if (property.ValueKind == PropertyValueKind::Enumeration)
+            {
+                const EnumerationValue& enumeration = value.Get<EnumerationValue>();
+                const auto found = std::ranges::find_if(property.Metadata.EnumOptions,
+                    [&enumeration](const EnumOption& option)
+                    {
+                        return option.Value == enumeration.Value && option.Key == enumeration.Key;
+                    });
+                if (found == property.Metadata.EnumOptions.end())
+                    throw std::out_of_range("Reflection enumeration value is not a registered option.");
+            }
+
+            if (property.ValueKind == PropertyValueKind::Reference)
+            {
+                const ReferenceValue& reference = value.Get<ReferenceValue>();
+                if (reference.TargetType != property.Metadata.ReferenceTargetType)
+                    throw std::invalid_argument("Reflection reference target type does not match the property contract.");
+                if (property.Metadata.MaximumReferenceBytes != 0u &&
+                    reference.Identifier.size() > property.Metadata.MaximumReferenceBytes)
+                    throw std::length_error("Reflection reference identifier exceeds its configured byte limit.");
+            }
+
             if (!property.Metadata.Range.has_value()) return;
             const NumericRange range = *property.Metadata.Range;
             double numeric = 0.0;
@@ -201,7 +288,7 @@ export namespace kairo::reflection
 
     /// Input: concrete object/member type and semantic metadata. Output: a
     /// descriptor safe to register under that object's TypeDescriptor. Task:
-    /// provide inspector-ready adapters without runtime RTTI or UI coupling.
+    /// provide inspector-ready primitive adapters without runtime RTTI or UI coupling.
     template<typename Object, ReflectablePrimitive Member>
     [[nodiscard]] PropertyDescriptor MakeMemberProperty(PropertyMetadata metadata, Member Object::* member)
     {
@@ -222,5 +309,117 @@ export namespace kairo::reflection
         }
         return descriptor;
     }
-}
 
+    /// Generic bridge for subsystem-owned composite types. Reflection owns the
+    /// canonical PropertyValue record while the subsystem supplies lossless
+    /// encode/decode functions for its concrete math/reference type.
+    template<typename Object, typename Member, typename Encoder, typename Decoder>
+    [[nodiscard]] PropertyDescriptor MakeAdaptedMemberProperty(
+        PropertyMetadata metadata,
+        Member Object::* member,
+        PropertyValueKind valueKind,
+        Encoder encoder,
+        Decoder decoder)
+    {
+        if (member == nullptr) throw std::invalid_argument("Reflection adapted member property requires a valid member pointer.");
+        PropertyDescriptor descriptor;
+        descriptor.Metadata = std::move(metadata);
+        descriptor.ValueKind = valueKind;
+        descriptor.Read = [member, encoder = std::move(encoder)](const void* object) mutable
+        {
+            return std::invoke(encoder, static_cast<const Object*>(object)->*member);
+        };
+        if (!HasFlag(descriptor.Metadata.Flags, PropertyFlags::ReadOnly))
+        {
+            descriptor.Write = [member, decoder = std::move(decoder)](void* object, const PropertyValue& value) mutable
+            {
+                static_cast<Object*>(object)->*member = std::invoke(decoder, value);
+            };
+        }
+        return descriptor;
+    }
+
+    template<typename Object, typename Enum>
+        requires std::is_enum_v<Enum>
+    [[nodiscard]] PropertyDescriptor MakeEnumMemberProperty(
+        PropertyMetadata metadata,
+        Enum Object::* member)
+    {
+        if (member == nullptr) throw std::invalid_argument("Reflection enum member property requires a valid member pointer.");
+        const std::vector<EnumOption> options = metadata.EnumOptions;
+        PropertyDescriptor descriptor;
+        descriptor.Metadata = std::move(metadata);
+        descriptor.ValueKind = PropertyValueKind::Enumeration;
+        descriptor.Read = [member, options](const void* object)
+        {
+            using Underlying = std::underlying_type_t<Enum>;
+            const Underlying raw = static_cast<Underlying>(static_cast<const Object*>(object)->*member);
+            std::int64_t numeric = 0;
+            if constexpr (std::is_unsigned_v<Underlying>)
+            {
+                if (static_cast<std::uint64_t>(raw) > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+                    throw std::out_of_range("Reflected enumeration value cannot fit the canonical signed representation.");
+                numeric = static_cast<std::int64_t>(raw);
+            }
+            else numeric = static_cast<std::int64_t>(raw);
+
+            const auto found = std::ranges::find_if(options, [numeric](const EnumOption& option) { return option.Value == numeric; });
+            if (found == options.end())
+                throw std::logic_error("Reflected enum object contains a value absent from its metadata options.");
+            return PropertyValue(EnumerationValue{ found->Value, found->Key });
+        };
+        if (!HasFlag(descriptor.Metadata.Flags, PropertyFlags::ReadOnly))
+        {
+            descriptor.Write = [member, options](void* object, const PropertyValue& value)
+            {
+                const EnumerationValue& requested = value.Get<EnumerationValue>();
+                const auto found = std::ranges::find_if(options, [&requested](const EnumOption& option)
+                {
+                    return option.Value == requested.Value && option.Key == requested.Key;
+                });
+                if (found == options.end())
+                    throw std::out_of_range("Reflected enumeration value is not a registered option.");
+
+                using Underlying = std::underlying_type_t<Enum>;
+                if constexpr (std::is_unsigned_v<Underlying>)
+                {
+                    if (found->Value < 0 || static_cast<std::uint64_t>(found->Value) >
+                        static_cast<std::uint64_t>(std::numeric_limits<Underlying>::max()))
+                        throw std::out_of_range("Reflected enumeration value does not fit its destination type.");
+                }
+                else if (found->Value < static_cast<std::int64_t>(std::numeric_limits<Underlying>::min()) ||
+                    found->Value > static_cast<std::int64_t>(std::numeric_limits<Underlying>::max()))
+                    throw std::out_of_range("Reflected enumeration value does not fit its destination type.");
+
+                static_cast<Object*>(object)->*member = static_cast<Enum>(static_cast<Underlying>(found->Value));
+            };
+        }
+        return descriptor;
+    }
+
+    template<typename Object, typename Member, typename Encoder, typename Decoder>
+    [[nodiscard]] PropertyDescriptor MakeReferenceMemberProperty(
+        PropertyMetadata metadata,
+        Member Object::* member,
+        std::string targetType,
+        Encoder encodeIdentifier,
+        Decoder decodeIdentifier)
+    {
+        if (!IsStableKey(targetType))
+            throw std::invalid_argument("Reflection reference adapter target type must be a stable key.");
+        metadata.ReferenceTargetType = targetType;
+        return MakeAdaptedMemberProperty<Object, Member>(
+            std::move(metadata), member, PropertyValueKind::Reference,
+            [targetType, encodeIdentifier = std::move(encodeIdentifier)](const Member& value) mutable
+            {
+                return PropertyValue(ReferenceValue{ targetType, std::invoke(encodeIdentifier, value) });
+            },
+            [targetType, decodeIdentifier = std::move(decodeIdentifier)](const PropertyValue& value) mutable
+            {
+                const ReferenceValue& reference = value.Get<ReferenceValue>();
+                if (reference.TargetType != targetType)
+                    throw std::invalid_argument("Reflection reference adapter received the wrong target type.");
+                return std::invoke(decodeIdentifier, reference.Identifier);
+            });
+    }
+}
