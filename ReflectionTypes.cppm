@@ -114,7 +114,31 @@ export namespace kairo::reflection
         Vector4,
         Quaternion,
         Enumeration,
-        Reference
+        Reference,
+        Array
+    };
+
+    /// Array values are homogeneous and deliberately non-recursive in V3.
+    /// This covers inspector/runtime collections without allowing arbitrary
+    /// nested document trees to leak into the reflection value transport.
+    using ArrayElementStorage = std::variant<
+        bool,
+        std::int64_t,
+        std::uint64_t,
+        double,
+        std::string,
+        Vector2Value,
+        Vector3Value,
+        Vector4Value,
+        QuaternionValue,
+        EnumerationValue,
+        ReferenceValue>;
+
+    struct ArrayValue final
+    {
+        PropertyValueKind ElementKind = PropertyValueKind::Boolean;
+        std::vector<ArrayElementStorage> Values;
+        friend bool operator==(const ArrayValue&, const ArrayValue&) = default;
     };
 
     enum class PropertyFlags : std::uint32_t
@@ -151,7 +175,8 @@ export namespace kairo::reflection
             Vector4Value,
             QuaternionValue,
             EnumerationValue,
-            ReferenceValue>;
+            ReferenceValue,
+            ArrayValue>;
 
         PropertyValue(bool value) : m_Value(value) {}
         PropertyValue(std::int64_t value) : m_Value(value) {}
@@ -184,13 +209,21 @@ export namespace kairo::reflection
         PropertyValue(ReferenceValue value) : m_Value(std::move(value))
         {
             const auto& stored = std::get<ReferenceValue>(m_Value);
-            if (!IsStableKey(stored.TargetType))
-                throw std::invalid_argument("Reflection reference target type must be a stable dotted ASCII identifier.");
-            if (stored.Identifier.size() > 4096u)
-                throw std::length_error("Reflection reference identifier exceeds 4096 bytes.");
-            for (const unsigned char character : stored.Identifier)
-                if (character < 0x20u || character == 0x7Fu)
-                    throw std::invalid_argument("Reflection reference identifiers cannot contain control bytes.");
+            ValidateReference(stored);
+        }
+        PropertyValue(ArrayValue value) : m_Value(std::move(value))
+        {
+            const auto& stored = std::get<ArrayValue>(m_Value);
+            if (stored.ElementKind == PropertyValueKind::Array)
+                throw std::invalid_argument("Reflection arrays cannot recursively contain arrays in V3.");
+            if (stored.Values.size() > 65536u)
+                throw std::length_error("Reflection array exceeds the 65536-element transport limit.");
+            for (const ArrayElementStorage& element : stored.Values)
+            {
+                if (element.index() != static_cast<std::size_t>(stored.ElementKind))
+                    throw std::invalid_argument("Reflection array element kind does not match its homogeneous contract.");
+                ValidateArrayElement(stored.ElementKind, element);
+            }
         }
 
         [[nodiscard]] PropertyValueKind Kind() const noexcept
@@ -214,6 +247,65 @@ export namespace kairo::reflection
         {
             if (!std::isfinite(value))
                 throw std::invalid_argument("Reflection floating-point values must be finite.");
+        }
+
+        static void ValidateReference(const ReferenceValue& stored)
+        {
+            if (!IsStableKey(stored.TargetType))
+                throw std::invalid_argument("Reflection reference target type must be a stable dotted ASCII identifier.");
+            if (stored.Identifier.size() > 4096u)
+                throw std::length_error("Reflection reference identifier exceeds 4096 bytes.");
+            for (const unsigned char character : stored.Identifier)
+                if (character < 0x20u || character == 0x7Fu)
+                    throw std::invalid_argument("Reflection reference identifiers cannot contain control bytes.");
+        }
+
+        static void ValidateArrayElement(PropertyValueKind kind, const ArrayElementStorage& element)
+        {
+            switch (kind)
+            {
+                case PropertyValueKind::FloatingPoint:
+                    RequireFinite(std::get<double>(element));
+                    break;
+                case PropertyValueKind::Vector2:
+                {
+                    const auto& value = std::get<Vector2Value>(element);
+                    RequireFinite(value.X); RequireFinite(value.Y);
+                    break;
+                }
+                case PropertyValueKind::Vector3:
+                {
+                    const auto& value = std::get<Vector3Value>(element);
+                    RequireFinite(value.X); RequireFinite(value.Y); RequireFinite(value.Z);
+                    break;
+                }
+                case PropertyValueKind::Vector4:
+                {
+                    const auto& value = std::get<Vector4Value>(element);
+                    RequireFinite(value.X); RequireFinite(value.Y); RequireFinite(value.Z); RequireFinite(value.W);
+                    break;
+                }
+                case PropertyValueKind::Quaternion:
+                {
+                    const auto& value = std::get<QuaternionValue>(element);
+                    RequireFinite(value.X); RequireFinite(value.Y); RequireFinite(value.Z); RequireFinite(value.W);
+                    break;
+                }
+                case PropertyValueKind::Enumeration:
+                {
+                    const auto& value = std::get<EnumerationValue>(element);
+                    if (!IsStableKey(value.Key))
+                        throw std::invalid_argument("Reflection array enumeration key must be a stable dotted ASCII identifier.");
+                    break;
+                }
+                case PropertyValueKind::Reference:
+                    ValidateReference(std::get<ReferenceValue>(element));
+                    break;
+                case PropertyValueKind::Array:
+                    throw std::invalid_argument("Nested reflection arrays are unsupported.");
+                default:
+                    break;
+            }
         }
 
         Storage m_Value;
@@ -242,6 +334,8 @@ export namespace kairo::reflection
         std::vector<EnumOption> EnumOptions;
         std::string ReferenceTargetType;
         std::size_t MaximumReferenceBytes = 0u;
+        std::optional<PropertyValueKind> ArrayElementKind;
+        std::size_t MaximumArrayElements = 0u;
     };
 
     template<typename Value>
@@ -303,5 +397,50 @@ export namespace kairo::reflection
             return static_cast<Clean>(source);
         }
         else return value.Get<std::string>();
+    }
+
+    template<ReflectablePrimitive Value>
+    [[nodiscard]] inline ArrayElementStorage EncodeArrayElement(const Value& value)
+    {
+        using Clean = std::remove_cvref_t<Value>;
+        if constexpr (std::same_as<Clean, bool>) return ArrayElementStorage(value);
+        else if constexpr (std::integral<Clean> && std::is_signed_v<Clean>)
+            return ArrayElementStorage(static_cast<std::int64_t>(value));
+        else if constexpr (std::integral<Clean>)
+            return ArrayElementStorage(static_cast<std::uint64_t>(value));
+        else if constexpr (std::floating_point<Clean>)
+            return ArrayElementStorage(static_cast<double>(value));
+        else return ArrayElementStorage(value);
+    }
+
+    template<ReflectablePrimitive Value>
+    [[nodiscard]] inline Value DecodeArrayElement(const ArrayElementStorage& value)
+    {
+        using Clean = std::remove_cvref_t<Value>;
+        if constexpr (std::same_as<Clean, bool>) return std::get<bool>(value);
+        else if constexpr (std::integral<Clean> && std::is_signed_v<Clean>)
+        {
+            const std::int64_t source = std::get<std::int64_t>(value);
+            if (source < static_cast<std::int64_t>(std::numeric_limits<Clean>::min()) ||
+                source > static_cast<std::int64_t>(std::numeric_limits<Clean>::max()))
+                throw std::out_of_range("Reflected array signed integer does not fit its destination type.");
+            return static_cast<Clean>(source);
+        }
+        else if constexpr (std::integral<Clean>)
+        {
+            const std::uint64_t source = std::get<std::uint64_t>(value);
+            if (source > static_cast<std::uint64_t>(std::numeric_limits<Clean>::max()))
+                throw std::out_of_range("Reflected array unsigned integer does not fit its destination type.");
+            return static_cast<Clean>(source);
+        }
+        else if constexpr (std::floating_point<Clean>)
+        {
+            const double source = std::get<double>(value);
+            if (source < -static_cast<double>(std::numeric_limits<Clean>::max()) ||
+                source > static_cast<double>(std::numeric_limits<Clean>::max()))
+                throw std::out_of_range("Reflected array floating-point value does not fit its destination type.");
+            return static_cast<Clean>(source);
+        }
+        else return std::get<std::string>(value);
     }
 }
