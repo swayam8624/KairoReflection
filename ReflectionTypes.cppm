@@ -291,6 +291,13 @@ export namespace kairo::reflection
                     RequireFinite(value.X); RequireFinite(value.Y); RequireFinite(value.Z); RequireFinite(value.W);
                     break;
                 }
+                case PropertyValueKind::String:
+                {
+                    const auto& value = std::get<std::string>(element);
+                    if (value.size() > 4096u)
+                        throw std::length_error("Reflection array string element exceeds 4096 bytes.");
+                    break;
+                }
                 case PropertyValueKind::Enumeration:
                 {
                     const auto& value = std::get<EnumerationValue>(element);
