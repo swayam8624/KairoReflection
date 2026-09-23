@@ -63,8 +63,14 @@ boolean types.
 - Property snapshots and search results are deterministic by stable type key.
 - `MakeMemberProperty` supports `bool`, signed/unsigned integral types,
   floating-point types, and `std::string` fields.
-- Enums, arrays, object references, vectors, and custom drawers will be added
-  as explicit adapters rather than hidden conversions.
+- Vector/quaternion and subsystem-owned composite values use explicit
+  `MakeAdaptedMemberProperty` adapters rather than hidden coercion.
+- Enum properties retain stable symbolic keys plus validated numeric values.
+- Reference properties declare one stable target type and bounded identifier.
+- V3 homogeneous arrays are bounded, non-recursive, explicitly typed, and may
+  use the primitive vector adapter or a subsystem-owned composite adapter.
+- Custom UI drawers remain a consumer concern; reflection describes semantics,
+  not Dear ImGui/Qt rendering policy.
 
 ## Build
 
@@ -80,3 +86,19 @@ This repository intentionally does not contain serialization, an ECS, an
 editor UI, a property-grid implementation, code generation, or a plugin ABI.
 Those systems consume this metadata layer; keeping ownership separate avoids a
 second scene model and leaves KairoUI free to evolve independently.
+
+
+## V3 Collections
+
+`PropertyValueKind::Array` carries a homogeneous `ArrayValue` with an explicit
+element kind. The canonical transport hard-limits arrays to 65,536 elements;
+individual properties may specify a tighter `MaximumArrayElements`. Nested
+arrays are intentionally rejected in V3 so reflection metadata does not become
+an unbounded document tree.
+
+`MakePrimitiveArrayMemberProperty` round-trips bounded vectors of supported
+primitive values through the same pre-mutation validation path as scalar
+properties. More specialized arrays can use the generic adapted-property
+boundary.
+
+See [STATUS.md](STATUS.md) for the frozen Wave-B scope and 80% exit contract.
