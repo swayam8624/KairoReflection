@@ -121,6 +121,21 @@ export namespace kairo::reflection
 
         detail::ValidateEnumOptions(property);
         detail::ValidateReferenceMetadata(property);
+
+        if (property.ValueKind == PropertyValueKind::Array)
+        {
+            if (!property.Metadata.ArrayElementKind.has_value())
+                throw std::invalid_argument("Array reflection properties require an element-kind contract.");
+            if (*property.Metadata.ArrayElementKind == PropertyValueKind::Array)
+                throw std::invalid_argument("Nested reflection arrays are unsupported in V3.");
+            if (property.Metadata.MaximumArrayElements > 65536u)
+                throw std::length_error("Reflection array element limit cannot exceed 65536.");
+        }
+        else if (property.Metadata.ArrayElementKind.has_value() ||
+                 property.Metadata.MaximumArrayElements != 0u)
+        {
+            throw std::invalid_argument("Only array reflection properties may declare array metadata.");
+        }
     }
 
     inline void ValidateTypeDescriptor(const TypeDescriptor& type)
@@ -263,6 +278,17 @@ export namespace kairo::reflection
                     throw std::length_error("Reflection reference identifier exceeds its configured byte limit.");
             }
 
+            if (property.ValueKind == PropertyValueKind::Array)
+            {
+                const ArrayValue& array = value.Get<ArrayValue>();
+                if (!property.Metadata.ArrayElementKind.has_value() ||
+                    array.ElementKind != *property.Metadata.ArrayElementKind)
+                    throw std::invalid_argument("Reflection array element kind does not match the property contract.");
+                if (property.Metadata.MaximumArrayElements != 0u &&
+                    array.Values.size() > property.Metadata.MaximumArrayElements)
+                    throw std::length_error("Reflection array exceeds its configured element limit.");
+            }
+
             if (!property.Metadata.Range.has_value()) return;
             const NumericRange range = *property.Metadata.Range;
             double numeric = 0.0;
@@ -392,6 +418,48 @@ export namespace kairo::reflection
                     throw std::out_of_range("Reflected enumeration value does not fit its destination type.");
 
                 static_cast<Object*>(object)->*member = static_cast<Enum>(static_cast<Underlying>(found->Value));
+            };
+        }
+        return descriptor;
+    }
+
+    /// Primitive vector adapter for bounded homogeneous collection fields.
+    /// Composite/reference arrays can use MakeAdaptedMemberProperty with
+    /// PropertyValueKind::Array and explicit ArrayValue encoding.
+    template<typename Object, ReflectablePrimitive Element>
+    [[nodiscard]] PropertyDescriptor MakePrimitiveArrayMemberProperty(
+        PropertyMetadata metadata,
+        std::vector<Element> Object::* member)
+    {
+        if (member == nullptr)
+            throw std::invalid_argument("Reflection array member property requires a valid member pointer.");
+        metadata.ArrayElementKind = PropertyKindOf<Element>();
+
+        PropertyDescriptor descriptor;
+        descriptor.Metadata = std::move(metadata);
+        descriptor.ValueKind = PropertyValueKind::Array;
+        descriptor.Read = [member](const void* object)
+        {
+            const auto& source = static_cast<const Object*>(object)->*member;
+            ArrayValue array;
+            array.ElementKind = PropertyKindOf<Element>();
+            array.Values.reserve(source.size());
+            for (const Element& element : source)
+                array.Values.push_back(EncodeArrayElement(element));
+            return PropertyValue(std::move(array));
+        };
+        if (!HasFlag(descriptor.Metadata.Flags, PropertyFlags::ReadOnly))
+        {
+            descriptor.Write = [member](void* object, const PropertyValue& value)
+            {
+                const ArrayValue& array = value.Get<ArrayValue>();
+                if (array.ElementKind != PropertyKindOf<Element>())
+                    throw std::invalid_argument("Reflection array adapter received the wrong element kind.");
+                std::vector<Element> decoded;
+                decoded.reserve(array.Values.size());
+                for (const ArrayElementStorage& element : array.Values)
+                    decoded.push_back(DecodeArrayElement<Element>(element));
+                static_cast<Object*>(object)->*member = std::move(decoded);
             };
         }
         return descriptor;
