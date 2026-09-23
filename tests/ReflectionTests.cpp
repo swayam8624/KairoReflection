@@ -4,6 +4,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 import Kairo.Reflection;
 
@@ -249,4 +250,78 @@ TEST_CASE("Reflection V2 validates composite enum and reference contracts", "[Ka
         }
     }
     FAIL("Composite descriptor did not contain its enumeration property.");
+}
+
+
+TEST_CASE("Reflection V3 round trips bounded primitive arrays", "[KairoReflection][V3][Array]")
+{
+    struct CollectionSettings final
+    {
+        std::vector<std::int32_t> Layers{ 1, 3, 7 };
+        std::vector<std::string> Labels{ "player", "visible" };
+    };
+
+    PropertyMetadata layers{
+        "layers", "Layers", "Runtime", "Layer indices"
+    };
+    layers.MaximumArrayElements = 8u;
+
+    PropertyMetadata labels{
+        "labels", "Labels", "Runtime", "Stable labels"
+    };
+    labels.MaximumArrayElements = 4u;
+
+    TypeDescriptor type;
+    type.Key = "Kairo.Engine.CollectionSettings";
+    type.DisplayName = "Collection Settings";
+    type.Category = "Testing";
+    type.Properties = {
+        MakePrimitiveArrayMemberProperty<CollectionSettings>(
+            std::move(layers), &CollectionSettings::Layers),
+        MakePrimitiveArrayMemberProperty<CollectionSettings>(
+            std::move(labels), &CollectionSettings::Labels)
+    };
+
+    ReflectionRegistry registry;
+    registry.Register(std::move(type));
+    CollectionSettings settings;
+
+    const PropertyValue initial =
+        registry.Read("Kairo.Engine.CollectionSettings", "layers", &settings);
+    REQUIRE(initial.Kind() == PropertyValueKind::Array);
+    const ArrayValue& initialArray = initial.Get<ArrayValue>();
+    CHECK(initialArray.ElementKind == PropertyValueKind::SignedInteger);
+    REQUIRE(initialArray.Values.size() == 3u);
+    CHECK(std::get<std::int64_t>(initialArray.Values[2]) == 7);
+
+    ArrayValue replacement;
+    replacement.ElementKind = PropertyValueKind::SignedInteger;
+    replacement.Values = {
+        ArrayElementStorage(std::int64_t{ 2 }),
+        ArrayElementStorage(std::int64_t{ 4 }),
+        ArrayElementStorage(std::int64_t{ 6 })
+    };
+    registry.Write(
+        "Kairo.Engine.CollectionSettings", "layers", &settings,
+        PropertyValue(std::move(replacement)));
+    REQUIRE(settings.Layers == std::vector<std::int32_t>{ 2, 4, 6 });
+
+    ArrayValue tooLarge;
+    tooLarge.ElementKind = PropertyValueKind::String;
+    for (int index = 0; index < 5; ++index)
+        tooLarge.Values.emplace_back(std::string("tag"));
+    REQUIRE_THROWS_AS(
+        registry.Write(
+            "Kairo.Engine.CollectionSettings", "labels", &settings,
+            PropertyValue(std::move(tooLarge))),
+        std::length_error);
+
+    ArrayValue wrongKind;
+    wrongKind.ElementKind = PropertyValueKind::UnsignedInteger;
+    wrongKind.Values.emplace_back(std::uint64_t{ 1u });
+    REQUIRE_THROWS_AS(
+        registry.Write(
+            "Kairo.Engine.CollectionSettings", "layers", &settings,
+            PropertyValue(std::move(wrongKind))),
+        std::invalid_argument);
 }
