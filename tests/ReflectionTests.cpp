@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <variant>
 
 import Kairo.Reflection;
 
@@ -304,7 +305,7 @@ TEST_CASE("Reflection V3 round trips bounded primitive arrays", "[KairoReflectio
     registry.Write(
         "Kairo.Engine.CollectionSettings", "layers", &settings,
         PropertyValue(std::move(replacement)));
-    REQUIRE(settings.Layers == std::vector<std::int32_t>{ 2, 4, 6 });
+    REQUIRE((settings.Layers == std::vector<std::int32_t>{ 2, 4, 6 }));
 
     ArrayValue tooLarge;
     tooLarge.ElementKind = PropertyValueKind::String;
