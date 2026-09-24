@@ -2,8 +2,10 @@
 
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 #include <variant>
 
@@ -21,6 +23,26 @@ namespace
         std::uint32_t Revision = 1u;
     };
 
+    [[nodiscard]] PropertyMetadata Metadata(
+        std::string key,
+        std::string displayName,
+        std::string category,
+        std::string tooltip,
+        PropertyFlags flags = PropertyFlags::None,
+        std::optional<NumericRange> range = std::nullopt,
+        std::size_t maximumStringBytes = 0u)
+    {
+        PropertyMetadata metadata;
+        metadata.Key = std::move(key);
+        metadata.DisplayName = std::move(displayName);
+        metadata.Category = std::move(category);
+        metadata.Tooltip = std::move(tooltip);
+        metadata.Flags = flags;
+        metadata.Range = range;
+        metadata.MaximumStringBytes = maximumStringBytes;
+        return metadata;
+    }
+
     [[nodiscard]] TypeDescriptor MakeCameraDescriptor()
     {
         TypeDescriptor descriptor;
@@ -28,11 +50,22 @@ namespace
         descriptor.DisplayName = "Camera Settings";
         descriptor.Category = "Rendering";
         descriptor.Properties = {
-            MakeMemberProperty<CameraSettings>({ "field-of-view", "Field Of View", "Lens", "Vertical angle in degrees", PropertyFlags::None,
-                NumericRange{ 1.0, 179.0, 0.5 }, 0u }, &CameraSettings::FieldOfView),
-            MakeMemberProperty<CameraSettings>({ "name", "Name", "General", "Display name", PropertyFlags::None, std::nullopt, 32u }, &CameraSettings::Name),
-            MakeMemberProperty<CameraSettings>({ "enabled", "Enabled", "General", "", PropertyFlags::None, std::nullopt, 0u }, &CameraSettings::Enabled),
-            MakeMemberProperty<CameraSettings>({ "revision", "Revision", "Internal", "Read-only version", PropertyFlags::ReadOnly, std::nullopt, 0u }, &CameraSettings::Revision)
+            MakeMemberProperty<CameraSettings>(
+                Metadata("field-of-view", "Field Of View", "Lens",
+                    "Vertical angle in degrees", PropertyFlags::None,
+                    NumericRange{ 1.0, 179.0, 0.5 }),
+                &CameraSettings::FieldOfView),
+            MakeMemberProperty<CameraSettings>(
+                Metadata("name", "Name", "General", "Display name",
+                    PropertyFlags::None, std::nullopt, 32u),
+                &CameraSettings::Name),
+            MakeMemberProperty<CameraSettings>(
+                Metadata("enabled", "Enabled", "General", ""),
+                &CameraSettings::Enabled),
+            MakeMemberProperty<CameraSettings>(
+                Metadata("revision", "Revision", "Internal", "Read-only version",
+                    PropertyFlags::ReadOnly),
+                &CameraSettings::Revision)
         };
         return descriptor;
     }
@@ -68,22 +101,18 @@ namespace
 
     [[nodiscard]] TypeDescriptor MakeCompositeDescriptor()
     {
-        PropertyMetadata position{
-            "position", "Position", "Transform", "World-independent position value"
-        };
-        PropertyMetadata rotation{
-            "rotation", "Rotation", "Transform", "Quaternion orientation"
-        };
-        PropertyMetadata mode{
-            "projection-mode", "Projection Mode", "Camera", "Projection policy"
-        };
+        PropertyMetadata position = Metadata(
+            "position", "Position", "Transform", "World-independent position value");
+        PropertyMetadata rotation = Metadata(
+            "rotation", "Rotation", "Transform", "Quaternion orientation");
+        PropertyMetadata mode = Metadata(
+            "projection-mode", "Projection Mode", "Camera", "Projection policy");
         mode.EnumOptions = {
             { 1, "projection.perspective", "Perspective" },
             { 2, "projection.orthographic", "Orthographic" }
         };
-        PropertyMetadata mesh{
-            "mesh", "Mesh", "Rendering", "Stable mesh asset reference"
-        };
+        PropertyMetadata mesh = Metadata(
+            "mesh", "Mesh", "Rendering", "Stable mesh asset reference");
         mesh.MaximumReferenceBytes = 64u;
 
         TypeDescriptor descriptor;
@@ -161,7 +190,8 @@ TEST_CASE("Reflection registration is deterministic and validates stable metadat
 {
     ReflectionRegistry registry;
     TypeDescriptor descriptor = MakeCameraDescriptor();
-    descriptor.Properties.push_back(MakeMemberProperty<CameraSettings>({ "alpha", "Alpha", "General", "", PropertyFlags::None, std::nullopt, 0u }, &CameraSettings::Enabled));
+    descriptor.Properties.push_back(MakeMemberProperty<CameraSettings>(
+        Metadata("alpha", "Alpha", "General", ""), &CameraSettings::Enabled));
     registry.Register(descriptor);
 
     const TypeDescriptor& registered = registry.Require("Kairo.Engine.CameraSettings");
@@ -261,14 +291,12 @@ TEST_CASE("Reflection V3 round trips bounded primitive arrays", "[KairoReflectio
         std::vector<std::string> Labels{ "player", "visible" };
     };
 
-    PropertyMetadata layers{
-        "layers", "Layers", "Runtime", "Layer indices"
-    };
+    PropertyMetadata layers = Metadata(
+        "layers", "Layers", "Runtime", "Layer indices");
     layers.MaximumArrayElements = 8u;
 
-    PropertyMetadata labels{
-        "labels", "Labels", "Runtime", "Stable labels"
-    };
+    PropertyMetadata labels = Metadata(
+        "labels", "Labels", "Runtime", "Stable labels");
     labels.MaximumArrayElements = 4u;
 
     TypeDescriptor type;
