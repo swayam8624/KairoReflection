@@ -18,6 +18,7 @@ add_library(KairoReflection)
 add_library(Kairo::Reflection ALIAS KairoReflection)
 target_sources(KairoReflection PUBLIC FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR} FILES
     ReflectionTypes.cppm ReflectionRegistry.cppm KairoReflection.cppm)
+set_property(TARGET KairoReflection PROPERTY COMPILE_WARNING_AS_ERROR ON)
 
 if(KAIRO_REFLECTION_BUILD_TESTS)
     include(FetchContent)
@@ -29,6 +30,12 @@ if(KAIRO_REFLECTION_BUILD_TESTS)
     FetchContent_MakeAvailable(Catch2)
     add_executable(KairoReflectionTests tests/ReflectionTests.cpp)
     target_link_libraries(KairoReflectionTests PRIVATE KairoReflection Catch2::Catch2WithMain)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        target_compile_options(KairoReflectionTests PRIVATE
+            -Wno-c2y-extensions
+            -Wno-missing-field-initializers)
+    endif()
+    set_property(TARGET KairoReflectionTests PROPERTY COMPILE_WARNING_AS_ERROR ON)
     add_test(NAME KairoReflectionTests COMMAND KairoReflectionTests)
 endif()
 
