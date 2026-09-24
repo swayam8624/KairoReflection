@@ -1,23 +1,19 @@
-# KairoReflection Status
+# KairoReflection v1 Status
 
-Wave: B — metadata-contract completion  
-Frozen v1 target: 80/100  
-Source gate: complete  
-Execution gate: `ctest --test-dir <build> --output-on-failure`
+**Target: 95%. Current completion claim: UNVERIFIED.**
 
-## Frozen v1 scope
+The earlier percentage claim has been retracted. A frozen scope or a populated
+`STATUS.yaml` is not evidence that this repository builds, runs, or satisfies
+its integration contract.
 
-Reflection v1 provides stable compiler-independent type/property keys, deterministic immutable registration, validated primitive access, vectors/quaternions through adapters, enums, stable subsystem references and bounded homogeneous collections. Serialization, UI drawing, ECS ownership and plugin loading remain outside the repository.
+Current rules:
 
-## 80 exit evidence
+- `target_score: 95` is a target only.
+- `completion_score: unverified` remains until exact-head acceptance executes.
+- source/test failures block completion regardless of documentation state.
+- platform-gated behavior is not inferred from another host.
+- post-v1 exclusions may bound scope, but they cannot hide missing v1 behavior.
 
-- Primitive typed member adapters validate range, size and read-only contracts.
-- Composite vector/quaternion adapters are UI neutral.
-- Enums validate stable symbolic/numeric options.
-- Stable references validate target type and bounded identifier payload.
-- V3 adds bounded homogeneous non-recursive arrays with explicit element kind and element-count limits.
-- Collection writes decode into a temporary vector before object replacement, preserving strong failure behavior.
-
-## Post-80 direction
-
-Custom editor drawers and richer subsystem-specific adapters may be added by consumers without changing the canonical metadata/value contract.
+Use the repository's real build/test gate and the KairoGameEngine portfolio
+acceptance runner. Do not cite this repository as 95% complete until the
+accepted exact-head evidence matches the current revision.
