@@ -239,7 +239,6 @@ TEST_CASE("Reflection V2 validates composite enum and reference contracts", "[Ka
     REQUIRE_THROWS_AS(ReflectionRegistry{}.Register(std::move(invalid)), std::invalid_argument);
 
     TypeDescriptor duplicateEnum = MakeCompositeDescriptor();
-    auto& options = duplicateEnum.Properties.at(1u).Metadata.EnumOptions;
     // Registered property order is not sorted until registry insertion; locate enum explicitly.
     for (PropertyDescriptor& property : duplicateEnum.Properties)
     {
