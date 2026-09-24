@@ -30,7 +30,7 @@ if(KAIRO_REFLECTION_BUILD_TESTS)
     FetchContent_MakeAvailable(Catch2)
     add_executable(KairoReflectionTests tests/ReflectionTests.cpp)
     target_link_libraries(KairoReflectionTests PRIVATE KairoReflection Catch2::Catch2WithMain)
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 23)
         target_compile_options(KairoReflectionTests PRIVATE
             -Wno-c2y-extensions
             -Wno-missing-field-initializers)
