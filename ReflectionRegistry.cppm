@@ -102,6 +102,10 @@ export namespace kairo::reflection
         }
     }
 
+    // Teaching: validate a property definition at registration time, before any UI or
+    // serializer can call its accessor. This enforces stable field identity,
+    // display metadata and type-specific constraints; it does NOT validate the
+    // lifetime or concrete type of an object passed to Read/Write later.
     inline void ValidatePropertyDescriptor(const PropertyDescriptor& property)
     {
         if (!IsStableKey(property.Metadata.Key))
@@ -143,6 +147,9 @@ export namespace kairo::reflection
         }
     }
 
+    // Teaching: validate the whole type and its property keys before publishing
+    // metadata. ReflectionRegistry::Register sorts and stores descriptors only
+    // after this succeeds, so inspector schemas remain stable during sessions.
     inline void ValidateTypeDescriptor(const TypeDescriptor& type)
     {
         if (!IsStableKey(type.Key)) throw std::invalid_argument("Reflection type key must be a stable dotted ASCII identifier.");
@@ -168,6 +175,9 @@ export namespace kairo::reflection
     class ReflectionRegistry final
     {
     public:
+        // Teaching: Register owns a copy of immutable *metadata*, never a
+        // reflected object. Sorting properties makes lookup/inspector order
+        // deterministic; a duplicate type key fails rather than replacing it.
         void Register(TypeDescriptor type)
         {
             ValidateTypeDescriptor(type);
@@ -204,6 +214,10 @@ export namespace kairo::reflection
             return result;
         }
 
+        // Teaching: caller supplies an existing object of the descriptor's
+        // exact concrete type. The registry checks pointer non-nullness and
+        // the returned value kind, but cannot runtime-prove a void* points to
+        // that type; object ownership stays with EngineCore/Editor/ECS.
         [[nodiscard]] PropertyValue Read(std::string_view typeKey, std::string_view propertyKey, const void* object) const
         {
             if (object == nullptr) throw std::invalid_argument("Reflection read requires a non-null object.");
@@ -215,6 +229,9 @@ export namespace kairo::reflection
             return value;
         }
 
+        // Teaching: writes validate the read-only flag and value constraints
+        // before invoking a typed accessor. The UI must keep the target object
+        // alive and use the registered descriptor's exact C++ type.
         void Write(std::string_view typeKey, std::string_view propertyKey, void* object, const PropertyValue& value) const
         {
             if (object == nullptr) throw std::invalid_argument("Reflection write requires a non-null object.");
