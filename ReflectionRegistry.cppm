@@ -1,7 +1,7 @@
 // TEACHING MAP — ReflectionRegistry.cppm
-//  metadata to construct validated inspectors, while EngineCore provides component registration.
-// Follow READING_ORDER.md for API relationships, calling modules, and tests.
-// These are explanatory annotations, not additional runtime behavior.
+// Registers TypeDescriptor and PropertyDescriptor callbacks; callers own reflected object
+// lifetime. Editor consults these descriptors while typed validation controls writes.
+// See READING_ORDER.md for caller/callee APIs and validation examples.
 
 module;
 
