@@ -1,3 +1,8 @@
+// TEACHING MAP — ReflectionTypes.cppm
+// ts and stable keys are part of an API contract; reflection metadata is not an object instance.
+// Follow READING_ORDER.md for API relationships, calling modules, and tests.
+// These are explanatory annotations, not additional runtime behavior.
+
 module;
 
 #include <cmath>
