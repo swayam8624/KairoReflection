@@ -49,6 +49,7 @@ export namespace kairo::reflection
                 kind == PropertyValueKind::FloatingPoint;
         }
 
+        /// TEACHING API: inline void ValidateEnumOptions( — An enum descriptor's options must agree with canonical enumeration IDs; unrelated property kinds cannot claim enum options.
         inline void ValidateEnumOptions(const PropertyDescriptor& property)
         {
             if (property.ValueKind != PropertyValueKind::Enumeration)
@@ -82,6 +83,7 @@ export namespace kairo::reflection
             }
         }
 
+        /// TEACHING API: inline void ValidateReferenceMetadata( — A reference property must declare a compatible stable target key before registration.
         inline void ValidateReferenceMetadata(const PropertyDescriptor& property)
         {
             if (property.ValueKind == PropertyValueKind::Reference)
@@ -98,6 +100,7 @@ export namespace kairo::reflection
         }
     }
 
+    /// TEACHING API: inline void ValidatePropertyDescriptor( — Reject invalid field names, property value kinds and metadata/range limits before the registry accepts the descriptor.
     inline void ValidatePropertyDescriptor(const PropertyDescriptor& property)
     {
         if (!IsStableKey(property.Metadata.Key))
@@ -139,6 +142,7 @@ export namespace kairo::reflection
         }
     }
 
+    /// TEACHING API: inline void ValidateTypeDescriptor( — Validate type ID, display/category limits, bounded property count and duplicate keys without mutating the registry.
     inline void ValidateTypeDescriptor(const TypeDescriptor& type)
     {
         if (!IsStableKey(type.Key)) throw std::invalid_argument("Reflection type key must be a stable dotted ASCII identifier.");
@@ -164,6 +168,7 @@ export namespace kairo::reflection
     class ReflectionRegistry final
     {
     public:
+        /// TEACHING API: void Register(TypeDescriptor type) — Validate and sort properties by stable key before insertion. Registration is immutable and duplicate type IDs fail, making inspector ordering reproducible.
         void Register(TypeDescriptor type)
         {
             ValidateTypeDescriptor(type);
@@ -211,6 +216,7 @@ export namespace kairo::reflection
             return value;
         }
 
+        /// TEACHING API: void Write(std::string_view typeKey, — Validate pointer, read-only flag, kind and allowed range before calling the property accessor, avoiding mutation from invalid input.
         void Write(std::string_view typeKey, std::string_view propertyKey, void* object, const PropertyValue& value) const
         {
             if (object == nullptr) throw std::invalid_argument("Reflection write requires a non-null object.");
