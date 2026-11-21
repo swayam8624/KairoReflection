@@ -1,3 +1,8 @@
+# TEACHING BUILD: Defines the three C++23 reflection module units and
+# optional Catch2 tests. Consumers can link Kairo::Reflection without bringing
+# the editor or a rendering backend. A supported C++23-module compiler and an
+# executed CTest run are needed before reporting verification.
+
 cmake_minimum_required(VERSION 3.28)
 project(KairoReflection VERSION 0.1.0 LANGUAGES CXX)
 
