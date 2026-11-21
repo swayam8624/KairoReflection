@@ -1,3 +1,8 @@
+// SOURCE STUDY NOTE:
+// Associates typed descriptors with validated read/write property accessors. EngineCore, ECS and Editor
+// retain object ownership; using the wrong object pointer violates the accessor contract.
+// Cross-file guide: docs/SOURCE_READING_ORDER.md.
+
 module;
 
 #include <algorithm>
