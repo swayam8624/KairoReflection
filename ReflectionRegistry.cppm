@@ -1,3 +1,4 @@
+// TEACHING MAP: Metadata registry maps stable component/field identities to validated descriptions used by EngineCore serialization and Editor inspectors. Reflection is not a license to mutate arbitrary state without constraints.
 module;
 
 #include <algorithm>
