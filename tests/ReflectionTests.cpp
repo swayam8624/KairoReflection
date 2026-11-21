@@ -1,3 +1,8 @@
+// TEACHING MAP — tests/ReflectionTests.cpp
+// s; exercising callbacks in tests does not grant the registry ownership of the original object.
+// Follow READING_ORDER.md for API relationships, calling modules, and tests.
+// These are explanatory annotations, not additional runtime behavior.
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
