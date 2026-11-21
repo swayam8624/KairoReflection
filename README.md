@@ -1,5 +1,7 @@
 # KairoReflection
 
+> **Study the source:** The [linked teaching reading guide](docs/SOURCE_READING_ORDER.md) explains modules, API boundaries, dependencies, tests, and key data flows. Original project-owned code and documentation are proposed under the [MIT License](LICENSE) for learning, reuse and further development. Third-party materials retain their respective rights; provenance should be reviewed before redistribution.
+
 `KairoReflection` is Kairo's engine-owned C++23 reflection metadata layer. It
 turns typed runtime fields into stable, validated property descriptors for the
 editor inspector, serializers, graph parameter panels, search, and future
