@@ -1,7 +1,7 @@
 // TEACHING MAP — KairoReflection.cppm
-// ponent descriptions, and editor clients consume them without hardcoding every component field.
-// Follow READING_ORDER.md for API relationships, calling modules, and tests.
-// These are explanatory annotations, not additional runtime behavior.
+// Public C++23 umbrella for registry and type contracts. External EngineCore supplies
+// reflected component metadata, and KairoEditor consumes it without hardcoded widgets.
+// See READING_ORDER.md for caller/callee APIs and validation examples.
 
 export module Kairo.Reflection;
 
