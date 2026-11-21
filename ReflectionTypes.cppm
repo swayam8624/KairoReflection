@@ -1,3 +1,8 @@
+// TEACHING MAP — ReflectionTypes.cppm
+// Defines property value kinds, stable metadata keys and constraints. EngineCore registers
+// component descriptions; Editor reads these definitions to construct inspector forms.
+// See READING_ORDER.md for caller/callee APIs and validation examples.
+
 module;
 
 #include <cmath>

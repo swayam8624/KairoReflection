@@ -1,3 +1,8 @@
+// TEACHING MAP — tests/ReflectionTests.cpp
+// Exercises typed property access, metadata validation and registry lookups. Reflection does
+// not acquire ownership of objects merely because its callbacks read/write them.
+// See READING_ORDER.md for caller/callee APIs and validation examples.
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>

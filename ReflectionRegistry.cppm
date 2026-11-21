@@ -1,3 +1,8 @@
+// TEACHING MAP — ReflectionRegistry.cppm
+// Registers TypeDescriptor and PropertyDescriptor callbacks; callers own reflected object
+// lifetime. Editor consults these descriptors while typed validation controls writes.
+// See READING_ORDER.md for caller/callee APIs and validation examples.
+
 module;
 
 #include <algorithm>

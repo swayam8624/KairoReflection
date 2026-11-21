@@ -1,3 +1,7 @@
+> **Learn the source:** [READING_ORDER.md](READING_ORDER.md) links all source/test files in a learning order and explains cross-repository APIs.
+>
+> **Open source:** Original KairoReflection code is under [MIT](LICENSE), permitting learning, reuse and further development. External dependencies retain separate terms; the document is not evidence of complete per-function comments or integrated acceptance.
+
 # KairoReflection
 
 `KairoReflection` is Kairo's engine-owned C++23 reflection metadata layer. It
