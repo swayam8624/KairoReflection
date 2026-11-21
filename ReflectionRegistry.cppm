@@ -181,11 +181,13 @@ export namespace kairo::reflection
                 throw std::invalid_argument("Reflection type is already registered: " + key);
         }
 
+        /// TEACHING API: bool Contains(std::string_view key) — Check registered type identity by stable key rather than compiler RTTI.
         [[nodiscard]] bool Contains(std::string_view key) const noexcept
         {
             return m_Types.find(key) != m_Types.end();
         }
 
+        /// TEACHING API: const TypeDescriptor& Require( — Return immutable descriptor or throw on unknown type; reference lifetime belongs to the registry.
         [[nodiscard]] const TypeDescriptor& Require(std::string_view key) const
         {
             const auto found = m_Types.find(key);
@@ -193,6 +195,7 @@ export namespace kairo::reflection
             return found->second;
         }
 
+        /// TEACHING API: std::vector<std::reference_wrapper<const TypeDescriptor>> Snapshot( — Return borrowed descriptors in stable registry order; caller must keep registry alive.
         [[nodiscard]] std::vector<std::reference_wrapper<const TypeDescriptor>> Snapshot() const
         {
             std::vector<std::reference_wrapper<const TypeDescriptor>> result;
@@ -205,6 +208,7 @@ export namespace kairo::reflection
             return result;
         }
 
+        /// TEACHING API: PropertyValue Read( — Read caller-owned object via checked accessor; then verify type and value bounds before UI consumers see it.
         [[nodiscard]] PropertyValue Read(std::string_view typeKey, std::string_view propertyKey, const void* object) const
         {
             if (object == nullptr) throw std::invalid_argument("Reflection read requires a non-null object.");
@@ -229,6 +233,7 @@ export namespace kairo::reflection
             property.Write(object, value);
         }
 
+        /// TEACHING API: std::vector<std::reference_wrapper<const TypeDescriptor>> Search( — Find registered types by case-insensitive ASCII name/category; returned references are borrowed.
         [[nodiscard]] std::vector<std::reference_wrapper<const TypeDescriptor>> Search(std::string_view query) const
         {
             std::string normalized = LowerAscii(query);
@@ -246,6 +251,7 @@ export namespace kairo::reflection
     private:
         std::map<std::string, TypeDescriptor, std::less<>> m_Types;
 
+        /// TEACHING API: const PropertyDescriptor& RequireProperty( — Resolve one stable field key within a type or throw, rather than relying on display labels.
         [[nodiscard]] static const PropertyDescriptor& RequireProperty(const TypeDescriptor& type, std::string_view key)
         {
             const auto found = std::ranges::find_if(type.Properties, [key](const PropertyDescriptor& property)
@@ -257,6 +263,7 @@ export namespace kairo::reflection
             return *found;
         }
 
+        /// TEACHING API: void ValidateValue( — Enforce range, enumeration, reference, array and string constraints prior to mutation.
         static void ValidateValue(const PropertyDescriptor& property, const PropertyValue& value)
         {
             if (property.ValueKind == PropertyValueKind::String && property.Metadata.MaximumStringBytes != 0u &&
@@ -323,6 +330,7 @@ export namespace kairo::reflection
     /// descriptor safe to register under that object's TypeDescriptor. Task:
     /// provide inspector-ready primitive adapters without runtime RTTI or UI coupling.
     template<typename Object, ReflectablePrimitive Member>
+    /// TEACHING API: PropertyDescriptor MakeMemberProperty( — Bind a C++ member pointer to typed primitive accessors; object pointer and lifetime remain caller's responsibility.
     [[nodiscard]] PropertyDescriptor MakeMemberProperty(PropertyMetadata metadata, Member Object::* member)
     {
         if (member == nullptr) throw std::invalid_argument("Reflection member property requires a valid member pointer.");
@@ -347,6 +355,7 @@ export namespace kairo::reflection
     /// canonical PropertyValue record while the subsystem supplies lossless
     /// encode/decode functions for its concrete math/reference type.
     template<typename Object, typename Member, typename Encoder, typename Decoder>
+    /// TEACHING API: PropertyDescriptor MakeAdaptedMemberProperty( — Use explicit encoder/decoder functions to bridge composite domain types without storing object memory.
     [[nodiscard]] PropertyDescriptor MakeAdaptedMemberProperty(
         PropertyMetadata metadata,
         Member Object::* member,
@@ -374,6 +383,7 @@ export namespace kairo::reflection
 
     template<typename Object, typename Enum>
         requires std::is_enum_v<Enum>
+    /// TEACHING API: PropertyDescriptor MakeEnumMemberProperty( — Represent C++ enum by stable key/value; validate listed options and underlying integer range.
     [[nodiscard]] PropertyDescriptor MakeEnumMemberProperty(
         PropertyMetadata metadata,
         Enum Object::* member)
@@ -434,6 +444,7 @@ export namespace kairo::reflection
     /// Composite/reference arrays can use MakeAdaptedMemberProperty with
     /// PropertyValueKind::Array and explicit ArrayValue encoding.
     template<typename Object, ReflectablePrimitive Element>
+    /// TEACHING API: PropertyDescriptor MakePrimitiveArrayMemberProperty( — Create bounded homogeneous array value and decode into temporary before replacing member.
     [[nodiscard]] PropertyDescriptor MakePrimitiveArrayMemberProperty(
         PropertyMetadata metadata,
         std::vector<Element> Object::* member)
@@ -473,6 +484,7 @@ export namespace kairo::reflection
     }
 
     template<typename Object, typename Member, typename Encoder, typename Decoder>
+    /// TEACHING API: PropertyDescriptor MakeReferenceMemberProperty( — Validate stable reference-target type and translate identifier; this does not check asset existence.
     [[nodiscard]] PropertyDescriptor MakeReferenceMemberProperty(
         PropertyMetadata metadata,
         Member Object::* member,
