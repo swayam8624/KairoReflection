@@ -1,7 +1,7 @@
 // TEACHING MAP — ReflectionTypes.cppm
-// ts and stable keys are part of an API contract; reflection metadata is not an object instance.
-// Follow READING_ORDER.md for API relationships, calling modules, and tests.
-// These are explanatory annotations, not additional runtime behavior.
+// Defines property value kinds, stable metadata keys and constraints. EngineCore registers
+// component descriptions; Editor reads these definitions to construct inspector forms.
+// See READING_ORDER.md for caller/callee APIs and validation examples.
 
 module;
 
