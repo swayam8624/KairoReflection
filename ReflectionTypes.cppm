@@ -1,3 +1,8 @@
+// SOURCE STUDY NOTE:
+// Property kinds, values and metadata contracts used by ReflectionRegistry and consuming
+// inspector/serialization tools; they describe data without allocating reflected objects.
+// Cross-file guide: docs/SOURCE_READING_ORDER.md.
+
 module;
 
 #include <cmath>
