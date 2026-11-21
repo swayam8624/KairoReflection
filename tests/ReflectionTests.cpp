@@ -1,3 +1,8 @@
+// TEACHING TEST FILE: Catch2 scenarios treat stable descriptor identity and
+// pre-mutation validation as externally visible contracts. CameraSettings is
+// owned by the test, not the registry; REQUIRE_THROWS_AS verifies invalid
+// writes are rejected rather than partially mutating the object.
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
@@ -154,6 +159,7 @@ namespace
     }
 }
 
+// TEACHING TEST: Round-trip typed primitive member access, with actual object memory remaining caller-owned.
 TEST_CASE("Reflection registry reads and writes typed member properties", "[KairoReflection][Access]")
 {
     ReflectionRegistry registry;
@@ -171,6 +177,7 @@ TEST_CASE("Reflection registry reads and writes typed member properties", "[Kair
     CHECK(registry.Read("Kairo.Engine.CameraSettings", "revision", &camera) == PropertyValue(std::uint64_t{ 1u }));
 }
 
+// TEACHING TEST: Reject read-only writes, out-of-range numbers, wrong value kinds and oversized strings.
 TEST_CASE("Reflection rejects invalid values before objects mutate", "[KairoReflection][Validation]")
 {
     ReflectionRegistry registry;
@@ -186,6 +193,7 @@ TEST_CASE("Reflection rejects invalid values before objects mutate", "[KairoRefl
     REQUIRE_THROWS_AS(registry.Read("Kairo.Engine.CameraSettings", "name", nullptr), std::invalid_argument);
 }
 
+// TEACHING TEST: Canonicalize metadata ordering and reject duplicate or malformed stable keys.
 TEST_CASE("Reflection registration is deterministic and validates stable metadata", "[KairoReflection][Registry]")
 {
     ReflectionRegistry registry;
@@ -206,6 +214,7 @@ TEST_CASE("Reflection registration is deterministic and validates stable metadat
     REQUIRE_THROWS_AS(ReflectionRegistry{}.Register(std::move(invalid)), std::invalid_argument);
 }
 
+// TEACHING TEST: Verify math composites, enum key/value pair and referenced asset identity survive encode/decode.
 TEST_CASE("Reflection V2 round trips composite enum and stable reference values", "[KairoReflection][V2]")
 {
     ReflectionRegistry registry;
@@ -239,6 +248,7 @@ TEST_CASE("Reflection V2 round trips composite enum and stable reference values"
     CHECK(settings.Mesh == "00000000-0000-4000-8000-000000000099");
 }
 
+// TEACHING TEST: Fail closed on mismatched enum options, reference targets and nonfinite numeric composites.
 TEST_CASE("Reflection V2 validates composite enum and reference contracts", "[KairoReflection][V2][Validation]")
 {
     ReflectionRegistry registry;
@@ -283,6 +293,7 @@ TEST_CASE("Reflection V2 validates composite enum and reference contracts", "[Ka
 }
 
 
+// TEACHING TEST: Verify array element kind and bounded homogeneous collection transport.
 TEST_CASE("Reflection V3 round trips bounded primitive arrays", "[KairoReflection][V3][Array]")
 {
     struct CollectionSettings final
