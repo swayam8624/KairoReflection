@@ -1,3 +1,9 @@
+// TEACHING MODULE: This is the UI-neutral wire/value contract between EngineCore data,
+// Editor inspectors and serializable properties. Stable dotted ASCII keys are deliberately
+// independent of compiler RTTI; a PropertyValue owns a type-tagged std::variant of primitives,
+// composite math records, enum keys, references and bounded homogeneous arrays.
+// Validation must reject malformed keys, non-finite floats and unsupported nested arrays
+// before any caller mutates a reflected object. Reflection does not own object memory.
 module;
 
 #include <cmath>
@@ -20,6 +26,7 @@ export namespace kairo::reflection
     /// A type/property/reference key is a stable dotted ASCII identifier such as
     /// `Kairo.Engine.Transform`. It intentionally is not an RTTI name, which
     /// keeps serialized data and plugin boundaries compiler-independent.
+    /// TEACHING API: [[nodiscard]] inline bool IsStableKey( — Stable IDs reject empty segments, invalid leading characters and keys above 192 bytes; serialization must not depend on RTTI names.
     [[nodiscard]] inline bool IsStableKey(std::string_view key) noexcept
     {
         if (key.empty() || key.size() > 192u) return false;
@@ -226,12 +233,14 @@ export namespace kairo::reflection
             }
         }
 
+        /// TEACHING API: [[nodiscard]] PropertyValueKind Kind( — The variant index maps to the declared PropertyValueKind; consumers must preserve enum/variant ordering when evolving formats.
         [[nodiscard]] PropertyValueKind Kind() const noexcept
         {
             return static_cast<PropertyValueKind>(m_Value.index());
         }
 
         template<typename Value>
+        /// TEACHING API: [[nodiscard]] const Value& Get( — Typed std::get checks the active variant alternative and throws on a mismatched request; no unsafe pointer casting is needed.
         [[nodiscard]] const Value& Get() const
         {
             return std::get<Value>(m_Value);
@@ -243,12 +252,14 @@ export namespace kairo::reflection
         }
 
     private:
+        /// TEACHING API: static void RequireFinite( — NaN/Infinity must not enter numeric or vector/quaternion reflected values used by UI and serialization.
         static void RequireFinite(double value)
         {
             if (!std::isfinite(value))
                 throw std::invalid_argument("Reflection floating-point values must be finite.");
         }
 
+        /// TEACHING API: static void ValidateReference( — Require stable target-type key, bounded identifier length and no control bytes; validation does not prove the referenced asset exists.
         static void ValidateReference(const ReferenceValue& stored)
         {
             if (!IsStableKey(stored.TargetType))
@@ -260,6 +271,7 @@ export namespace kairo::reflection
                     throw std::invalid_argument("Reflection reference identifiers cannot contain control bytes.");
         }
 
+        /// TEACHING API: static void ValidateArrayElement( — Homogeneous property arrays validate every element's variant kind and finite numeric fields before publication.
         static void ValidateArrayElement(PropertyValueKind kind, const ArrayElementStorage& element)
         {
             switch (kind)
