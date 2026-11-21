@@ -1,3 +1,8 @@
+// TEACHING MAP — ReflectionRegistry.cppm
+//  metadata to construct validated inspectors, while EngineCore provides component registration.
+// Follow READING_ORDER.md for API relationships, calling modules, and tests.
+// These are explanatory annotations, not additional runtime behavior.
+
 module;
 
 #include <algorithm>
