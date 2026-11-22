@@ -1,4 +1,5 @@
 # KairoReflection
+**Deep source walkthrough:** [Stable reflection metadata and checked inspector writes](docs/REFLECTION_METADATA_TO_SAFE_EDITOR.md).
 
 **Learn the API:** [Reflection, descriptors and safe editing](docs/REFLECTION_WALKTHROUGH.md) · [File-by-file source map](docs/SOURCE_READING_ORDER.md)
 
