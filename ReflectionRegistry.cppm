@@ -67,7 +67,10 @@ export namespace kairo::reflection
         }
 
         /// TEACHING API: inline void ValidateEnumOptions( — An enum descriptor's options must agree with canonical enumeration IDs; unrelated property kinds cannot claim enum options.
-        inline void ValidateEnumOptions(const PropertyDescriptor& property)
+        // Enumeration descriptions must supply unique stable option keys *and*
+    // numeric values. Otherwise an inspector could show ambiguous labels and
+    // serialization could no longer round-trip values consistently.
+    inline void ValidateEnumOptions(const PropertyDescriptor& property)
         {
             if (property.ValueKind != PropertyValueKind::Enumeration)
             {
@@ -101,7 +104,10 @@ export namespace kairo::reflection
         }
 
         /// TEACHING API: inline void ValidateReferenceMetadata( — A reference property must declare a compatible stable target key before registration.
-        inline void ValidateReferenceMetadata(const PropertyDescriptor& property)
+        // Only reference properties may define a target schema and identifier byte
+    // limit. A typed reference key is a stable schema contract; it is not a
+    // pointer to a live EngineCore or GPU object.
+    inline void ValidateReferenceMetadata(const PropertyDescriptor& property)
         {
             if (property.ValueKind == PropertyValueKind::Reference)
             {
@@ -118,6 +124,9 @@ export namespace kairo::reflection
     }
 
     /// TEACHING API: inline void ValidatePropertyDescriptor( — Reject invalid field names, property value kinds and metadata/range limits before the registry accepts the descriptor.
+    // Verify key grammar, display labels, accessor presence, read-only rules,
+    // range applicability and collection/reference limits *before* making a
+    // descriptor visible to editors.
     inline void ValidatePropertyDescriptor(const PropertyDescriptor& property)
     {
         if (!IsStableKey(property.Metadata.Key))
@@ -160,6 +169,9 @@ export namespace kairo::reflection
     }
 
     /// TEACHING API: inline void ValidateTypeDescriptor( — Validate type ID, display/category limits, bounded property count and duplicate keys without mutating the registry.
+    // Reject invalid type metadata, more than allowed property count, duplicate
+    // per-type field keys and inconsistent accessors. Stable dotted keys are
+    // authored-schema identities independent of RTTI.
     inline void ValidateTypeDescriptor(const TypeDescriptor& type)
     {
         if (!IsStableKey(type.Key)) throw std::invalid_argument("Reflection type key must be a stable dotted ASCII identifier.");
@@ -191,6 +203,9 @@ export namespace kairo::reflection
         // Reject inconsistent/range-unsafe metadata before insertion.
         // Sorting properties by stable key prevents registration order
         // from changing inspector/document behavior.
+        // Check full descriptor, then sort properties by stable key and insert once.
+        // The registry does not own component objects; an Editor may retain
+        // descriptor references only while this registry remains alive.
         void Register(TypeDescriptor type)
         {
             ValidateTypeDescriptor(type);
@@ -231,6 +246,9 @@ export namespace kairo::reflection
         }
 
         /// TEACHING API: PropertyValue Read( — Read caller-owned object via checked accessor; then verify type and value bounds before UI consumers see it.
+        // Read borrows a caller-owned, correctly typed object pointer. Validate
+        // returned PropertyValueKind and constraints before exposing it to an
+        // inspector, including stale invalid enum values inside existing objects.
         [[nodiscard]] PropertyValue Read(std::string_view typeKey, std::string_view propertyKey, const void* object) const
         {
             if (object == nullptr) throw std::invalid_argument("Reflection read requires a non-null object.");
@@ -246,6 +264,9 @@ export namespace kairo::reflection
         // Validate both descriptor and supplied value before using
         // the trusted accessor. Caller owns the concrete object lifetime
         // and any undo transaction associated with this modification.
+        // Validate pointer, metadata key, read-only flag, exact value variant kind,
+        // range, bounded strings, enums, arrays and references before invoking
+        // accessor. Cross-field component invariants and Undo are the caller's job.
         void Write(std::string_view typeKey, std::string_view propertyKey, void* object, const PropertyValue& value) const
         {
             if (object == nullptr) throw std::invalid_argument("Reflection write requires a non-null object.");
@@ -259,6 +280,9 @@ export namespace kairo::reflection
         }
 
         /// TEACHING API: std::vector<std::reference_wrapper<const TypeDescriptor>> Search( — Find registered types by case-insensitive ASCII name/category; returned references are borrowed.
+        // Search lowercased ASCII key, display name and category. Results contain
+        // borrowed references into the registry map (not deep copies); do not
+        // outlive the registry or mutate its descriptors.
         [[nodiscard]] std::vector<std::reference_wrapper<const TypeDescriptor>> Search(std::string_view query) const
         {
             std::string normalized = LowerAscii(query);
@@ -277,6 +301,9 @@ export namespace kairo::reflection
         std::map<std::string, TypeDescriptor, std::less<>> m_Types;
 
         /// TEACHING API: const PropertyDescriptor& RequireProperty( — Resolve one stable field key within a type or throw, rather than relying on display labels.
+        // Resolve one field using its stable Key, not potentially localized or
+        // duplicated DisplayName. A missing field is an error rather than a guessed
+        // property, protecting saved inspector commands.
         [[nodiscard]] static const PropertyDescriptor& RequireProperty(const TypeDescriptor& type, std::string_view key)
         {
             const auto found = std::ranges::find_if(type.Properties, [key](const PropertyDescriptor& property)
@@ -289,6 +316,10 @@ export namespace kairo::reflection
         }
 
         /// TEACHING API: void ValidateValue( — Enforce range, enumeration, reference, array and string constraints prior to mutation.
+        // This boundary checks transport-level constraints: byte limits, enum key
+        // and numeric pair, matching reference target type, homogeneous array
+        // kind/count and scalar numeric ranges. It does not validate external file
+        // existence.
         static void ValidateValue(const PropertyDescriptor& property, const PropertyValue& value)
         {
             if (property.ValueKind == PropertyValueKind::String && property.Metadata.MaximumStringBytes != 0u &&
