@@ -1,4 +1,21 @@
-// TEACHING MAP: Metadata registry maps stable component/field identities to validated descriptions used by EngineCore serialization and Editor inspectors. Reflection is not a license to mutate arbitrary state without constraints.
+// TEACHING MAP: ReflectionRegistry stores immutable *type and property
+// descriptors*, keyed by stable dotted identifiers rather than RTTI.
+// Editor inspectors and EngineCore serializers consume these descriptors
+// to read and write caller-owned component objects through checked
+// accessor callbacks.
+//
+// A descriptor declares PropertyValueKind, read-only/range/enum/string/
+// array/reference rules and optional type-target constraints.
+// Register validates metadata and sorts fields deterministically;
+// Write checks object pointer, type, flags and value bounds before
+// dispatching the accessor. The registry never owns the object memory
+// passed as void*: the caller must supply exactly the expected concrete
+// object type and keep it alive during accessor execution.
+//
+// This is a trusted registration layer, not permission for AI tools or
+// arbitrary document data to write unrelated memory. Undo/redo lives in
+// Editor SceneCommands and validation at the authoring boundary.
+
 module;
 
 #include <algorithm>
@@ -165,10 +182,15 @@ export namespace kairo::reflection
     /// Deterministic metadata registry. Types are immutable after registration,
     /// which prevents an already-open inspector or serialized document from
     /// changing meaning as plugins load in a different order.
+    // Immutable after type registration. Types/properties are stable
+    // for open Editor panels, serialization and deterministic search.
     class ReflectionRegistry final
     {
     public:
         /// TEACHING API: void Register(TypeDescriptor type) — Validate and sort properties by stable key before insertion. Registration is immutable and duplicate type IDs fail, making inspector ordering reproducible.
+        // Reject inconsistent/range-unsafe metadata before insertion.
+        // Sorting properties by stable key prevents registration order
+        // from changing inspector/document behavior.
         void Register(TypeDescriptor type)
         {
             ValidateTypeDescriptor(type);
@@ -221,6 +243,9 @@ export namespace kairo::reflection
         }
 
         /// TEACHING API: void Write(std::string_view typeKey, — Validate pointer, read-only flag, kind and allowed range before calling the property accessor, avoiding mutation from invalid input.
+        // Validate both descriptor and supplied value before using
+        // the trusted accessor. Caller owns the concrete object lifetime
+        // and any undo transaction associated with this modification.
         void Write(std::string_view typeKey, std::string_view propertyKey, void* object, const PropertyValue& value) const
         {
             if (object == nullptr) throw std::invalid_argument("Reflection write requires a non-null object.");
