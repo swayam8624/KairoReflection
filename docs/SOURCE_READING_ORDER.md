@@ -1,4 +1,5 @@
 # Teaching source map — KairoReflection
+**Deep source walkthrough:** [Stable reflection metadata and checked inspector writes](REFLECTION_METADATA_TO_SAFE_EDITOR.md).
 
 Stable type/field metadata for authoring, validation and serialization.
 
