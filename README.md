@@ -1,7 +1,7 @@
 # KairoReflection
 **Deep source walkthrough:** [Stable reflection metadata and checked inspector writes](docs/REFLECTION_METADATA_TO_SAFE_EDITOR.md).
 
-**Learn the API:** [Reflection, descriptors and safe editing](docs/REFLECTION_WALKTHROUGH.md) · [File-by-file source map](docs/SOURCE_READING_ORDER.md)
+**Worked validation lab:** [From stable property keys to type-checked writes and Editor undo](docs/SAFE_REFLECTION_VALUES_TO_EDITOR_COMMANDS_LAB.md) · [Reflection, descriptors and safe editing](docs/REFLECTION_WALKTHROUGH.md) · [File-by-file source map](docs/SOURCE_READING_ORDER.md)
 
 `KairoReflection` is Kairo's engine-owned C++23 reflection metadata layer. It
 turns typed runtime fields into stable, validated property descriptors for the
