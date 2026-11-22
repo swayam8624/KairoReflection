@@ -27,6 +27,9 @@ export namespace kairo::reflection
     /// `Kairo.Engine.Transform`. It intentionally is not an RTTI name, which
     /// keeps serialized data and plugin boundaries compiler-independent.
     /// TEACHING API: [[nodiscard]] inline bool IsStableKey( — Stable IDs reject empty segments, invalid leading characters and keys above 192 bytes; serialization must not depend on RTTI names.
+    // Stable identifiers use dotted ASCII segments with alphabetic/underscore
+    // initials and bounded length. Do not use compiler RTTI or localized
+    // display labels for durable fields stored in scene files.
     [[nodiscard]] inline bool IsStableKey(std::string_view key) noexcept
     {
         if (key.empty() || key.size() > 192u) return false;
@@ -168,6 +171,10 @@ export namespace kairo::reflection
 
     /// An owned, UI-neutral value. Composite records deliberately use doubles so
     /// editor/document transports do not need the concrete engine math scalar type.
+    // A tagged owning std::variant forms the UI-neutral transport value:
+    // booleans, signed/unsigned numbers, floating point, UTF-8-ish strings,
+    // math records, enum, reference and bounded homogeneous arrays. This does
+    // not borrow the actual component.
     class PropertyValue final
     {
     public:
@@ -218,6 +225,10 @@ export namespace kairo::reflection
             const auto& stored = std::get<ReferenceValue>(m_Value);
             ValidateReference(stored);
         }
+        // Array construction rejects nested arrays, more than 65536 values,
+        // mismatched element variants and invalid numeric/reference data. These
+        // limits protect the transport even before a property's tighter metadata
+        // rules are checked.
         PropertyValue(ArrayValue value) : m_Value(std::move(value))
         {
             const auto& stored = std::get<ArrayValue>(m_Value);
@@ -234,6 +245,9 @@ export namespace kairo::reflection
         }
 
         /// TEACHING API: [[nodiscard]] PropertyValueKind Kind( — The variant index maps to the declared PropertyValueKind; consumers must preserve enum/variant ordering when evolving formats.
+        // Variant alternative order is treated as the canonical PropertyValueKind;
+        // changing either order without migrating format changes type
+        // interpretation across editor and serialized document boundaries.
         [[nodiscard]] PropertyValueKind Kind() const noexcept
         {
             return static_cast<PropertyValueKind>(m_Value.index());
@@ -260,6 +274,9 @@ export namespace kairo::reflection
         }
 
         /// TEACHING API: static void ValidateReference( — Require stable target-type key, bounded identifier length and no control bytes; validation does not prove the referenced asset exists.
+        // A reference transports a target *type key* and bounded identifier bytes;
+        // it does not check that a referenced AssetID or Entity currently exists.
+        // Object resolution belongs to the owning subsystem.
         static void ValidateReference(const ReferenceValue& stored)
         {
             if (!IsStableKey(stored.TargetType))
@@ -272,6 +289,9 @@ export namespace kairo::reflection
         }
 
         /// TEACHING API: static void ValidateArrayElement( — Homogeneous property arrays validate every element's variant kind and finite numeric fields before publication.
+        // Validate each homogeneous element's runtime content, including finite
+        // floating fields, stable enum keys and reference metadata. Nested arrays
+        // are intentionally unsupported in this version.
         static void ValidateArrayElement(PropertyValueKind kind, const ArrayElementStorage& element)
         {
             switch (kind)
@@ -388,6 +408,9 @@ export namespace kairo::reflection
     }
 
     template<ReflectablePrimitive Value>
+    // Decode a canonical int64/uint64/double into destination C++ type with
+    // explicit range checks. No implicit sign coercion or narrowing outside the
+    // destination's representable range is permitted.
     [[nodiscard]] inline Value DecodePropertyValue(const PropertyValue& value)
     {
         using Clean = std::remove_cvref_t<Value>;
@@ -433,6 +456,9 @@ export namespace kairo::reflection
     }
 
     template<ReflectablePrimitive Value>
+    // An array element uses the same strict primitive narrowing as a scalar
+    // PropertyValue. A homogeneous transport kind is necessary but not
+    // sufficient to fit a small destination C++ type.
     [[nodiscard]] inline Value DecodeArrayElement(const ArrayElementStorage& value)
     {
         using Clean = std::remove_cvref_t<Value>;
