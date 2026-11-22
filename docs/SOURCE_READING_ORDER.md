@@ -5,6 +5,8 @@ Stable type/field metadata for authoring, validation and serialization.
 
 Follow source links sequentially. For each API/function, identify its input contract, owning data structure, called modules, failure modes, outputs, test and downstream consumers.
 
+**Worked API exercise:** [PropertyValue variants, range enforcement, enum consistency and reversible inspector editing](SAFE_REFLECTION_VALUES_TO_EDITOR_COMMANDS_LAB.md). Follow the cross-repository Editor and EngineCore consumers after this module.
+
 ## Read in this order
 
 1. [`CMakeLists.txt`](../CMakeLists.txt)
